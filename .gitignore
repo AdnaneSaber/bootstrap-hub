@@ -1,0 +1,32 @@
+# Environment
+.env
+.env.*
+
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Uploads / bundles
+uploads/
+bundles/
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
+CLAUDE.md
+AGENTS.md

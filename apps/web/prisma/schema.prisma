@@ -1,0 +1,150 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String
+  role          Role      @default(VIEWER)
+  createdAt     DateTime  @default(now())
+  bundles       Bundle[]
+  auditLogs     AuditLog[]
+}
+
+enum Role {
+  ADMIN
+  OPERATOR
+  VIEWER
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  meta      Json?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model Application {
+  id                  String           @id @default(uuid())
+  name                String           @unique
+  description         String?
+  category            String
+  version             String?
+  downloadUrl         String?
+  installMethod       InstallMethod
+  silentInstallCommand String?
+  detectionMethod     DetectionMethod
+  detectionRule       Json
+  launchAfterInstall  Boolean          @default(false)
+  launchArguments     String?
+  sha256              String?
+  fileId              String?
+  file                UploadedFile?    @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  isDraft             Boolean          @default(false)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+}
+
+enum InstallMethod {
+  EXE
+  MSI
+  ZIP
+  PORTABLE
+  WINGET
+  CHOCO
+}
+
+enum DetectionMethod {
+  REGISTRY
+  PROGRAM
+  FILE
+  CUSTOM
+}
+
+model Extension {
+  id            String                @id @default(uuid())
+  name          String
+  extensionId   String
+  browser       Browser
+  chromeStoreUrl String?
+  installMethod ExtensionInstallMethod @default(POLICY)
+  createdAt     DateTime              @default(now())
+}
+
+enum Browser {
+  CHROME
+  BRAVE
+  EDGE
+}
+
+enum ExtensionInstallMethod {
+  POLICY
+  WEBSTORE
+}
+
+model UploadedFile {
+  id            String          @id @default(uuid())
+  originalName  String
+  mimeType      String
+  size          Int
+  sha256        String
+  path          String
+  createdAt     DateTime        @default(now())
+  applications  Application[]
+}
+
+model StartupAction {
+  id          String             @id @default(uuid())
+  name        String
+  actionType  StartupActionType
+  target      String
+  arguments   String?
+  workingDir  String?
+  order       Int                @default(0)
+  enabled     Boolean            @default(true)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+}
+
+enum StartupActionType {
+  EXECUTE
+  POWERSHELL
+  CMD
+  URL
+}
+
+model Bundle {
+  id            String   @id @default(uuid())
+  name          String
+  manifest      Json
+  signature     String
+  filePath      String
+  fileSize      Int
+  sha256        String
+  downloadCount Int      @default(0)
+  createdById   String?
+  createdBy     User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  installLogs   InstallLog[]
+}
+
+model InstallLog {
+  id        String   @id @default(uuid())
+  bundleId  String
+  machineId String?
+  status    String
+  logs      String?
+  createdAt DateTime @default(now())
+  bundle    Bundle   @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+}

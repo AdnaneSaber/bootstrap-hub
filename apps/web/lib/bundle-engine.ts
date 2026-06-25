@@ -1,0 +1,160 @@
+import fs from "fs";
+import path from "path";
+import { randomUUID } from "crypto";
+import archiver from "archiver";
+import { prisma } from "@/lib/prisma";
+import { sha256, signManifest } from "@/lib/crypto";
+import { BUNDLE_DIR } from "@/lib/paths";
+import { renderInstallerPs1 } from "@/lib/ps1-template";
+import { Prisma, type Application, type Extension, type StartupAction, type UploadedFile } from "@prisma/client";
+
+export interface BundleInput {
+  name: string;
+  applicationIds?: string[];
+  extensionIds?: string[];
+  startupActionIds?: string[];
+}
+
+export interface BundleManifest {
+  version: string;
+  name: string;
+  createdAt: string;
+  applications: Array<Application & { file?: UploadedFile | null; _bundleFileName?: string }>;
+  extensions: Extension[];
+  startupActions: StartupAction[];
+}
+
+export interface BundleBuildResult {
+  bundleId: string;
+  filePath: string;
+  fileSize: number;
+  sha256: string;
+  signature: string;
+}
+
+const MANIFEST_VERSION = "1.0";
+const SIGNING_SECRET = process.env.BUNDLE_SECRET || process.env.NEXTAUTH_SECRET || "fallback-secret-min-32-characters-long";
+
+if (!process.env.BUNDLE_SECRET && process.env.NODE_ENV === "production") {
+  console.warn("BUNDLE_SECRET is not set; falling back to NEXTAUTH_SECRET. Set BUNDLE_SECRET for production.");
+}
+
+export async function buildBundle(input: BundleInput, createdById?: string): Promise<BundleBuildResult> {
+  if (!fs.existsSync(BUNDLE_DIR)) {
+    fs.mkdirSync(BUNDLE_DIR, { recursive: true });
+  }
+
+  const [applications, extensions, startupActions] = await Promise.all([
+    fetchApplications(input.applicationIds),
+    fetchExtensions(input.extensionIds),
+    fetchStartupActions(input.startupActionIds),
+  ]);
+
+  const manifest: BundleManifest = {
+    version: MANIFEST_VERSION,
+    name: input.name,
+    createdAt: new Date().toISOString(),
+    applications: applications.map((app) => {
+      const { file, ...rest } = app;
+      return {
+        ...rest,
+        _bundleFileName: file ? sanitizeFileName(app.name) + path.extname(file.path) : undefined,
+      };
+    }),
+    extensions,
+    startupActions,
+  };
+
+  const signature = signManifest(manifest, SIGNING_SECRET);
+  const installerPs1 = renderInstallerPs1(manifest, signature);
+
+  const bundleId = randomUUID();
+  const fileName = `${sanitizeFileName(input.name)}-${bundleId}.zip`;
+  const filePath = path.join(BUNDLE_DIR, fileName);
+
+  const fileSize = await createZipBundle(filePath, manifest, signature, installerPs1, applications);
+  const fileSha256 = sha256(await fs.promises.readFile(filePath));
+
+  const bundle = await prisma.bundle.create({
+    data: {
+      id: bundleId,
+      name: input.name,
+      manifest: manifest as unknown as Prisma.InputJsonValue,
+      signature,
+      filePath,
+      fileSize,
+      sha256: fileSha256,
+      createdById,
+    },
+  });
+
+  return {
+    bundleId: bundle.id,
+    filePath: bundle.filePath,
+    fileSize: bundle.fileSize,
+    sha256: bundle.sha256,
+    signature: bundle.signature,
+  };
+}
+
+type ApplicationWithFile = Application & { file: UploadedFile | null };
+
+async function fetchApplications(ids?: string[]): Promise<ApplicationWithFile[]> {
+  if (!ids || ids.length === 0) return [];
+  return prisma.application.findMany({
+    where: { id: { in: ids } },
+    include: { file: true },
+  });
+}
+
+async function fetchExtensions(ids?: string[]): Promise<Extension[]> {
+  if (!ids || ids.length === 0) return [];
+  return prisma.extension.findMany({ where: { id: { in: ids } } });
+}
+
+async function fetchStartupActions(ids?: string[]): Promise<StartupAction[]> {
+  if (!ids || ids.length === 0) return [];
+  return prisma.startupAction.findMany({
+    where: { id: { in: ids }, enabled: true },
+    orderBy: { order: "asc" },
+  });
+}
+
+async function createZipBundle(
+  filePath: string,
+  manifest: BundleManifest,
+  signature: string,
+  installerPs1: string,
+  applications: ApplicationWithFile[]
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const output = fs.createWriteStream(filePath);
+    const archive = archiver("zip", { zlib: { level: 9 } });
+
+    output.on("close", () => resolve(archive.pointer()));
+    archive.on("error", (err) => reject(err));
+    archive.on("warning", (err) => {
+      if (err.code !== "ENOENT") reject(err);
+    });
+
+    archive.pipe(output);
+
+    const manifestJson = Buffer.from(JSON.stringify(manifest, null, 2));
+    archive.append(manifestJson, { name: "manifest.json" });
+    archive.append(manifestJson, { name: "config.json" });
+    archive.append(Buffer.from(signature), { name: "manifest.sig" });
+    archive.append(Buffer.from(installerPs1), { name: "bootstrap.ps1" });
+
+    for (const app of applications) {
+      if (app.file?.path && fs.existsSync(app.file.path)) {
+        archive.file(app.file.path, { name: path.join("files", sanitizeFileName(app.name) + path.extname(app.file.path)) });
+      }
+    }
+
+    void archive.finalize();
+  });
+}
+
+function sanitizeFileName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, "_").replace(/^_|_$/g, "");
+}

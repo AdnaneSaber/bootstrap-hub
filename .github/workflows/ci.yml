@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'apps/web/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'apps/web/**'
+
+jobs:
+  build-and-lint:
+    name: Build and Lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: bootstrap
+          POSTGRES_PASSWORD: bootstrap
+          POSTGRES_DB: bootstrap_hub
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Apply migrations
+        env:
+          DATABASE_URL: postgresql://bootstrap:bootstrap@localhost:5432/bootstrap_hub
+        run: npx prisma migrate deploy
+
+      - name: Seed database
+        env:
+          DATABASE_URL: postgresql://bootstrap:bootstrap@localhost:5432/bootstrap_hub
+          ADMIN_PASSWORD: ChangeMe123!
+        run: npx prisma db seed
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          NEXTAUTH_SECRET: ci-placeholder-secret-min-32-characters-long
+          BUNDLE_SECRET: ci-placeholder-bundle-secret-min-32-char-long
+          NEXTAUTH_URL: http://localhost:18797
+          DATABASE_URL: postgresql://bootstrap:bootstrap@localhost:5432/bootstrap_hub
+        run: node run-build.js
