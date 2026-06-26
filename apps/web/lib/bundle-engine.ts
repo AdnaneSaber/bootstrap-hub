@@ -24,19 +24,20 @@ export interface BundleManifest {
   startupActions: StartupAction[];
 }
 
+const MANIFEST_VERSION = "1.0";
+const SIGNING_SECRET = process.env.BUNDLE_SECRET || process.env.NEXTAUTH_SECRET || "fallback-secret-min-32-characters-long";
+
+if (!process.env.BUNDLE_SECRET && process.env.NODE_ENV === "production") {
+  console.warn("BUNDLE_SECRET is not set; falling back to NEXTAUTH_SECRET. Set BUNDLE_SECRET for production.");
+}
+
 export interface BundleBuildResult {
   bundleId: string;
   filePath: string;
   fileSize: number;
   sha256: string;
   signature: string;
-}
-
-const MANIFEST_VERSION = "1.0";
-const SIGNING_SECRET = process.env.BUNDLE_SECRET || process.env.NEXTAUTH_SECRET || "fallback-secret-min-32-characters-long";
-
-if (!process.env.BUNDLE_SECRET && process.env.NODE_ENV === "production") {
-  console.warn("BUNDLE_SECRET is not set; falling back to NEXTAUTH_SECRET. Set BUNDLE_SECRET for production.");
+  existing: boolean;
 }
 
 export async function buildBundle(input: BundleInput, createdById?: string): Promise<BundleBuildResult> {
@@ -49,6 +50,19 @@ export async function buildBundle(input: BundleInput, createdById?: string): Pro
     fetchExtensions(input.extensionIds),
     fetchStartupActions(input.startupActionIds),
   ]);
+
+  const selectionHash = computeSelectionHash(applications, extensions, startupActions);
+  const existing = await prisma.bundle.findUnique({ where: { selectionHash } });
+  if (existing && fs.existsSync(existing.filePath)) {
+    return {
+      bundleId: existing.id,
+      filePath: existing.filePath,
+      fileSize: existing.fileSize,
+      sha256: existing.sha256,
+      signature: existing.signature,
+      existing: true,
+    };
+  }
 
   const manifest: BundleManifest = {
     version: MANIFEST_VERSION,
@@ -67,18 +81,20 @@ export async function buildBundle(input: BundleInput, createdById?: string): Pro
 
   const signature = signManifest(manifest, SIGNING_SECRET);
   const installerPs1 = renderInstallerPs1(manifest, signature);
+  const bootstrapCmd = renderBootstrapCmd();
 
   const bundleId = randomUUID();
   const fileName = `${sanitizeFileName(input.name)}-${bundleId}.zip`;
   const filePath = path.join(BUNDLE_DIR, fileName);
 
-  const fileSize = await createZipBundle(filePath, manifest, signature, installerPs1, applications);
+  const fileSize = await createZipBundle(filePath, manifest, signature, installerPs1, bootstrapCmd, applications);
   const fileSha256 = sha256(await fs.promises.readFile(filePath));
 
   const bundle = await prisma.bundle.create({
     data: {
       id: bundleId,
       name: input.name,
+      selectionHash,
       manifest: manifest as unknown as Prisma.InputJsonValue,
       signature,
       filePath,
@@ -94,6 +110,7 @@ export async function buildBundle(input: BundleInput, createdById?: string): Pro
     fileSize: bundle.fileSize,
     sha256: bundle.sha256,
     signature: bundle.signature,
+    existing: false,
   };
 }
 
@@ -120,11 +137,46 @@ async function fetchStartupActions(ids?: string[]): Promise<StartupAction[]> {
   });
 }
 
+function computeSelectionHash(
+  applications: ApplicationWithFile[],
+  extensions: Extension[],
+  startupActions: StartupAction[]
+): string {
+  const timestamps = [
+    ...applications.map((a) => a.updatedAt),
+    ...extensions.map((e) => e.createdAt),
+    ...startupActions.map((s) => s.updatedAt),
+  ];
+  const maxUpdatedAt = timestamps.length > 0
+    ? new Date(Math.max(...timestamps.map((d) => new Date(d).getTime()))).toISOString()
+    : new Date().toISOString();
+
+  const canonical = JSON.stringify({
+    v: MANIFEST_VERSION,
+    applicationIds: applications.map((a) => a.id).sort(),
+    extensionIds: extensions.map((e) => e.id).sort(),
+    startupActionIds: startupActions.map((s) => s.id).sort(),
+    maxUpdatedAt,
+  });
+  return sha256(canonical);
+}
+
+function renderBootstrapCmd(): string {
+  return [
+    `@echo off`,
+    `REM Bootstrap Hub launcher - bypasses PowerShell execution policy and passes arguments through`,
+    `powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0bootstrap.ps1" %*`,
+    `pause`,
+    ``,
+  ].join("\r\n");
+}
+
 async function createZipBundle(
   filePath: string,
   manifest: BundleManifest,
   signature: string,
   installerPs1: string,
+  bootstrapCmd: string,
   applications: ApplicationWithFile[]
 ): Promise<number> {
   return new Promise((resolve, reject) => {
@@ -144,6 +196,7 @@ async function createZipBundle(
     archive.append(manifestJson, { name: "config.json" });
     archive.append(Buffer.from(signature), { name: "manifest.sig" });
     archive.append(Buffer.from(installerPs1), { name: "bootstrap.ps1" });
+    archive.append(Buffer.from(bootstrapCmd), { name: "bootstrap.cmd" });
 
     for (const app of applications) {
       if (app.file?.path && fs.existsSync(app.file.path)) {

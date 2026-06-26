@@ -125,18 +125,19 @@ enum StartupActionType {
 }
 
 model Bundle {
-  id            String   @id @default(uuid())
-  name          String
-  manifest      Json
-  signature     String
-  filePath      String
-  fileSize      Int
-  sha256        String
-  downloadCount Int      @default(0)
-  createdById   String?
-  createdBy     User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt     DateTime @default(now())
-  installLogs   InstallLog[]
+  id             String   @id @default(uuid())
+  name           String
+  selectionHash  String?  @unique
+  manifest       Json
+  signature      String
+  filePath       String
+  fileSize       Int
+  sha256         String
+  downloadCount  Int      @default(0)
+  createdById    String?
+  createdBy      User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt      DateTime @default(now())
+  installLogs    InstallLog[]
 }
 
 model InstallLog {

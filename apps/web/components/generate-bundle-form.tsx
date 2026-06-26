@@ -37,6 +37,7 @@ export function GenerateBundleForm({
   const [selectedActions, setSelectedActions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<{ bundleId: string; existing: boolean } | null>(null);
 
   function toggle(set: Set<string>, id: string) {
     const next = new Set(set);
@@ -67,7 +68,11 @@ export function GenerateBundleForm({
         throw new Error(data.error || "Bundle generation failed");
       }
 
-      router.push("/admin/bundles");
+      const json = await res.json();
+      setSuccess({
+        bundleId: json.data.bundleId,
+        existing: json.data.existing,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bundle generation failed");
     } finally {
@@ -203,6 +208,34 @@ export function GenerateBundleForm({
       {error && (
         <div className="rounded-md bg-red-50 p-4 text-sm text-red-700 dark:bg-red-950 dark:text-red-200">
           {error}
+        </div>
+      )}
+
+      {success && (
+        <div className="rounded-md bg-green-50 p-4 text-sm text-green-800 dark:bg-green-950 dark:text-green-200">
+          <p className="font-medium">
+            {success.existing ? "Existing bundle reused" : "Bundle created successfully"}
+          </p>
+          <p className="mt-1">
+            {success.existing
+              ? "The same selection already existed, so the existing bundle was returned."
+              : "A new bundle was generated and is ready for download."}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <a
+              href={`/api/bundles/${success.bundleId}/download`}
+              className="inline-flex items-center gap-1 rounded-md bg-green-700 px-3 py-1.5 text-white hover:bg-green-800"
+            >
+              Download ZIP
+            </a>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push("/dashboard/bundles")}
+            >
+              View bundles
+            </Button>
+          </div>
         </div>
       )}
 

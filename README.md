@@ -148,8 +148,11 @@ manifest.json        # Bundle descriptor (also included as config.json)
 config.json          # Same bundle descriptor for easy consumption
 manifest.sig         # HMAC-SHA256 signature
 bootstrap.ps1        # Generated PowerShell installer
+bootstrap.cmd        # Windows CMD wrapper that bypasses execution-policy blocks
 files/               # Uploaded installer files referenced by applications
 ```
+
+Bundles are cached by selection. Requesting the same combination of apps, extensions, and startup actions returns the existing bundle instead of creating a duplicate.
 
 On a Windows target machine, download and run the bundle:
 
@@ -161,14 +164,17 @@ Invoke-WebRequest -Uri $bundleUrl -OutFile "$env:TEMP\bootstrap-hub-setup.zip" -
 # Extract
 Expand-Archive -Path "$env:TEMP\bootstrap-hub-setup.zip" -DestinationPath "$env:TEMP\bootstrap-hub-setup" -Force
 
-# Right-click bootstrap.ps1 and run as Administrator
-& "$env:TEMP\bootstrap-hub-setup\bootstrap.ps1" -LogPath "$env:ProgramData\BootstrapHub\install.log"
+# Option 1 (recommended): run the CMD wrapper as Administrator
+& "$env:TEMP\bootstrap-hub-setup\bootstrap.cmd"
+
+# Option 2: run the PowerShell script directly, bypassing execution policy
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\bootstrap-hub-setup\bootstrap.ps1" -LogPath "$env:ProgramData\BootstrapHub\install.log"
 ```
 
 To skip signature verification (not recommended for production):
 
 ```powershell
-& "$env:TEMP\bootstrap-hub-setup\bootstrap.ps1" -SkipSignatureCheck -LogPath "$env:ProgramData\BootstrapHub\install.log"
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\bootstrap-hub-setup\bootstrap.ps1" -SkipSignatureCheck -LogPath "$env:ProgramData\BootstrapHub\install.log"
 ```
 
 The installer:
