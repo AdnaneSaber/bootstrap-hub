@@ -54,6 +54,7 @@ export function Button({
 }
 
 export function Input({
+  id,
   label,
   type = "text",
   name,
@@ -65,6 +66,7 @@ export function Input({
   className,
   onChange,
 }: {
+  id?: string;
   label?: string;
   type?: string;
   name?: string;
@@ -77,9 +79,10 @@ export function Input({
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
-    <label className="block w-full">
+    <label htmlFor={id} className="block w-full">
       {label && <span className="mb-1.5 block text-sm font-medium">{label}</span>}
       <input
+        id={id}
         type={type}
         name={name}
         value={value}
