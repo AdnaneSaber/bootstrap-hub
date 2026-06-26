@@ -1,0 +1,4 @@
+# Python dependencies for building the Bootstrap Hub installer.
+# The installer itself only uses the standard library, but PyInstaller is
+# required to produce the executable.
+pyinstaller>=6.0,<7.0

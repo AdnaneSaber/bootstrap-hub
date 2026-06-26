@@ -31,3 +31,11 @@ Thumbs.db
 # Misc
 CLAUDE.md
 AGENTS.md
+
+# PyInstaller / Python build artifacts
+.venv-installer/
+installer/build/
+installer/dist/
+*.spec
+__pycache__/
+*.pyc

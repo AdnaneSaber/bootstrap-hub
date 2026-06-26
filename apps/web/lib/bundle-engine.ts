@@ -20,6 +20,7 @@ export interface BundleManifest {
   version: string;
   name: string;
   createdAt: string;
+  signature?: string;
   applications: Array<Application & { file?: UploadedFile | null; _bundleFileName?: string }>;
   extensions: Extension[];
   startupActions: StartupAction[];
@@ -86,6 +87,7 @@ export async function buildBundle(input: BundleInput, createdById?: string): Pro
   };
 
   const signature = signManifest(manifest, SIGNING_SECRET);
+  manifest.signature = signature;
   const installerPs1 = renderInstallerPs1(manifest, signature);
   const bootstrapCmd = renderBootstrapCmd();
 
