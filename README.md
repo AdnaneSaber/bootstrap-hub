@@ -25,7 +25,8 @@ A self-hosted web dashboard for building, signing, and distributing Windows appl
 - Browser extension catalog (`CHROME`, `BRAVE`, `EDGE`)
 - Startup action editor (`EXECUTE`, `POWERSHELL`, `CMD`, `URL`)
 - Signed ZIP bundle builder with a generated PowerShell installer
-- File uploads with SHA-256 verification
+- File uploads with SHA-256 verification, stored on disk (default `/data/bootstrap-hub`)
+- Server-side downloading of application installers referenced by URL
 - Audit logging for every mutation
 - Optional AI agent for deployment review and Q&A (requires `OPENAI_API_KEY`)
 
@@ -58,6 +59,7 @@ Open https://bootstrap-hub.qwik.ma (or http://localhost:18797) and sign in with 
 | `OPENAI_API_KEY` | *(empty)* | Optional OpenAI-compatible API key |
 | `ADMIN_PASSWORD` | `ChangeMe123!` | Password for the seeded admin user |
 | `HOST_PORT` | `18797` | Host port mapped to the container |
+| `STORAGE_ROOT` | `/data/bootstrap-hub` | On-disk location for uploads, bundles, and downloaded assets |
 
 Generate secrets with:
 

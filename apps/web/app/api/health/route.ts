@@ -14,6 +14,9 @@ export async function GET() {
 
   let writable = false;
   try {
+    if (!fs.existsSync(BUNDLE_DIR)) {
+      fs.mkdirSync(BUNDLE_DIR, { recursive: true });
+    }
     fs.accessSync(BUNDLE_DIR, fs.constants.W_OK);
     writable = true;
   } catch {

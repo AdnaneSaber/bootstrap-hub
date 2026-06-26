@@ -40,6 +40,7 @@ The default admin user is created on first start if it does not exist.
 | `OPENAI_API_KEY` | *(empty)* | Optional OpenAI integration key |
 | `ADMIN_PASSWORD` | `ChangeMe123!` | Password for the seeded admin user |
 | `HOST_PORT` | `18797` | Host port mapped to the container |
+| `STORAGE_ROOT` | `/data/bootstrap-hub` | Host path mounted into the container for uploads, bundles, and downloaded assets |
 
 ### Generating secrets
 
@@ -48,6 +49,17 @@ openssl rand -base64 32
 ```
 
 Generate two separate values for `NEXTAUTH_SECRET` and `BUNDLE_SECRET`, then update `.env`.
+
+### Storage
+
+Uploads, generated bundles, and application installers downloaded from URLs are stored under `STORAGE_ROOT` (default `/data/bootstrap-hub`). The directory is bind-mounted into the container, so data survives container recreation. Ensure the host path has enough free space and is backed up.
+
+```text
+/data/bootstrap-hub/
+├── uploads/   # Uploaded installer files and server-side downloads
+├── bundles/   # Generated ZIP bundles
+└── cache/     # Working cache
+```
 
 ### Using a remote PostgreSQL server
 

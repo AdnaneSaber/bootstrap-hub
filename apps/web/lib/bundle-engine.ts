@@ -5,6 +5,7 @@ import archiver from "archiver";
 import { prisma } from "@/lib/prisma";
 import { sha256, signManifest } from "@/lib/crypto";
 import { BUNDLE_DIR } from "@/lib/paths";
+import { downloadFile } from "@/lib/downloader";
 import { renderInstallerPs1 } from "@/lib/ps1-template";
 import { Prisma, type Application, type Extension, type StartupAction, type UploadedFile } from "@prisma/client";
 
@@ -45,11 +46,16 @@ export async function buildBundle(input: BundleInput, createdById?: string): Pro
     fs.mkdirSync(BUNDLE_DIR, { recursive: true });
   }
 
-  const [applications, extensions, startupActions] = await Promise.all([
+  const [rawApplications, extensions, startupActions] = await Promise.all([
     fetchApplications(input.applicationIds),
     fetchExtensions(input.extensionIds),
     fetchStartupActions(input.startupActionIds),
   ]);
+
+  // Download any application installer files that are referenced by URL but not
+  // yet stored on disk. Persist them as UploadedFile records so the bundle
+  // contains the actual files requested by the user.
+  const applications = await ensureApplicationFiles(rawApplications);
 
   const selectionHash = computeSelectionHash(applications, extensions, startupActions);
   const existing = await prisma.bundle.findUnique({ where: { selectionHash } });
@@ -122,6 +128,64 @@ async function fetchApplications(ids?: string[]): Promise<ApplicationWithFile[]>
     where: { id: { in: ids } },
     include: { file: true },
   });
+}
+
+async function ensureApplicationFiles(applications: ApplicationWithFile[]): Promise<ApplicationWithFile[]> {
+  let changed = false;
+
+  for (const app of applications) {
+    if (app.fileId || !app.downloadUrl) continue;
+
+    try {
+      const downloaded = await downloadFile(app.downloadUrl);
+
+      // Reuse an existing uploaded file record with the same hash if present,
+      // but make sure its stored path points to the correctly-named file.
+      let uploaded = await prisma.uploadedFile.findFirst({ where: { sha256: downloaded.sha256 } });
+      if (!uploaded) {
+        uploaded = await prisma.uploadedFile.create({
+          data: {
+            originalName: downloaded.originalName,
+            mimeType: downloaded.mimeType,
+            size: downloaded.size,
+            sha256: downloaded.sha256,
+            path: downloaded.path,
+          },
+        });
+      } else if (uploaded.path !== downloaded.path) {
+        if (fs.existsSync(uploaded.path)) {
+          fs.unlinkSync(uploaded.path);
+        }
+        uploaded = await prisma.uploadedFile.update({
+          where: { id: uploaded.id },
+          data: {
+            originalName: downloaded.originalName,
+            mimeType: downloaded.mimeType,
+            size: downloaded.size,
+            path: downloaded.path,
+          },
+        });
+      }
+
+      await prisma.application.update({
+        where: { id: app.id },
+        data: {
+          fileId: uploaded.id,
+          sha256: downloaded.sha256,
+        },
+      });
+
+      changed = true;
+    } catch (err) {
+      console.error(`Failed to download installer for ${app.name} (${app.downloadUrl}):`, err);
+      throw new Error(`Could not download installer for ${app.name}. ${err instanceof Error ? err.message : ""}`);
+    }
+  }
+
+  if (!changed) return applications;
+
+  // Refetch so each app carries its newly attached file.
+  return fetchApplications(applications.map((a) => a.id));
 }
 
 async function fetchExtensions(ids?: string[]): Promise<Extension[]> {
