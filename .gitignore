@@ -9,9 +9,10 @@ node_modules/
 .next/
 out/
 
-# Uploads / bundles
-uploads/
-bundles/
+# Uploads / bundles (root-level storage dirs only)
+/uploads/
+/bundles/
+/data/
 
 # Logs
 *.log
