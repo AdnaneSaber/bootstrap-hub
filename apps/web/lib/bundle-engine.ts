@@ -137,7 +137,8 @@ async function ensureApplicationFiles(applications: ApplicationWithFile[]): Prom
     if (app.fileId || !app.downloadUrl) continue;
 
     try {
-      const downloaded = await downloadFile(app.downloadUrl);
+      const defaultExt = app.installMethod === "MSI" ? ".msi" : app.installMethod === "ZIP" ? ".zip" : ".exe";
+      const downloaded = await downloadFile(app.downloadUrl, undefined, defaultExt);
 
       // Reuse an existing uploaded file record with the same hash if present,
       // but make sure its stored path points to the correctly-named file.

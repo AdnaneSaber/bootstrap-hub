@@ -56,7 +56,11 @@ function guessFilename(url: string, contentDisposition?: string): string {
   return decodeURIComponent(base.split("?")[0]);
 }
 
-export async function downloadFile(url: string, nameHint?: string): Promise<DownloadResult> {
+export async function downloadFile(
+  url: string,
+  nameHint?: string,
+  defaultExt?: string
+): Promise<DownloadResult> {
   if (!url) throw new Error("Download URL is required");
 
   const res = await fetchWithRedirects(url);
@@ -65,8 +69,12 @@ export async function downloadFile(url: string, nameHint?: string): Promise<Down
     throw new Error(`Download failed with status ${res.statusCode} for ${url}`);
   }
 
-  const originalName = nameHint || guessFilename(url, res.headers["content-disposition"]);
+  let originalName = nameHint || guessFilename(url, res.headers["content-disposition"]);
   const mimeType = res.headers["content-type"] || "application/octet-stream";
+
+  if (defaultExt && path.extname(originalName) === "") {
+    originalName = originalName + defaultExt;
+  }
 
   if (!fs.existsSync(UPLOAD_DIR)) {
     fs.mkdirSync(UPLOAD_DIR, { recursive: true });
