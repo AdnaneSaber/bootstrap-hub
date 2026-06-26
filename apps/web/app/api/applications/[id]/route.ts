@@ -72,8 +72,13 @@ export async function PATCH(
         ...(data.silentInstallCommand !== undefined && {
           silentInstallCommand: data.silentInstallCommand ?? null,
         }),
+        ...(data.installArgs !== undefined && {
+          installArgs: (data.installArgs ?? []) as Prisma.InputJsonValue,
+        }),
         ...(data.detectionMethod !== undefined && { detectionMethod: data.detectionMethod }),
-        ...(data.detectionRule !== undefined && { detectionRule: data.detectionRule ?? {} }),
+        ...(data.detectionRule !== undefined && {
+          detectionRule: (data.detectionRule ?? {}) as Prisma.InputJsonValue,
+        }),
         ...(data.launchAfterInstall !== undefined && { launchAfterInstall: data.launchAfterInstall ?? false }),
         ...(data.launchArguments !== undefined && { launchArguments: data.launchArguments ?? null }),
         ...(data.sha256 !== undefined && { sha256: data.sha256 ?? null }),

@@ -44,6 +44,7 @@ model Application {
   downloadUrl         String?
   installMethod       InstallMethod
   silentInstallCommand String?
+  installArgs         Json?
   detectionMethod     DetectionMethod
   detectionRule       Json
   launchAfterInstall  Boolean          @default(false)

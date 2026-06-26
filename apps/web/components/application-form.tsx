@@ -31,6 +31,7 @@ export default function ApplicationForm({ initialData, files }: ApplicationFormP
     downloadUrl: initialData?.downloadUrl ?? "",
     installMethod: initialData?.installMethod ?? "EXE",
     silentInstallCommand: initialData?.silentInstallCommand ?? "",
+    installArgs: ((initialData?.installArgs as string[]) ?? []).join("\n"),
     detectionMethod: initialData?.detectionMethod ?? "REGISTRY",
     detectionRule: JSON.stringify((initialData?.detectionRule as Record<string, unknown>) ?? {}, null, 2),
     launchAfterInstall: initialData?.launchAfterInstall ?? false,
@@ -61,6 +62,7 @@ export default function ApplicationForm({ initialData, files }: ApplicationFormP
 
     const payload = {
       ...form,
+      installArgs: form.installArgs.split("\n").map((s) => s.trim()).filter(Boolean),
       detectionRule,
       fileId: form.fileId || null,
       downloadUrl: form.downloadUrl || null,
@@ -161,6 +163,13 @@ export default function ApplicationForm({ initialData, files }: ApplicationFormP
           label="Silent Install Command"
           value={form.silentInstallCommand}
           onChange={(e) => updateField("silentInstallCommand", e.target.value)}
+        />
+        <FormTextarea
+          label="Install Arguments (one per line)"
+          value={form.installArgs}
+          onChange={(e) => updateField("installArgs", e.target.value)}
+          rows={3}
+          placeholder="/SILENT&#10;/NORESTART"
         />
         <FormInput
           label="Launch Arguments"

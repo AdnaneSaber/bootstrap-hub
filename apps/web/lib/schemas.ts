@@ -15,6 +15,7 @@ export const ApplicationCreateSchema = z.object({
   downloadUrl: z.string().url().max(2000).nullish(),
   installMethod: z.nativeEnum(InstallMethod),
   silentInstallCommand: z.string().max(2000).nullish(),
+  installArgs: z.array(z.string().max(2000)).nullish().default([]),
   detectionMethod: z.nativeEnum(DetectionMethod),
   detectionRule: z.record(z.unknown()).nullish().default({}),
   launchAfterInstall: z.boolean().nullish().default(false),

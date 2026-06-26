@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
         downloadUrl: data.downloadUrl ?? null,
         installMethod: data.installMethod,
         silentInstallCommand: data.silentInstallCommand ?? null,
+        installArgs: (data.installArgs ?? []) as Prisma.InputJsonValue,
         detectionMethod: data.detectionMethod,
         detectionRule: (data.detectionRule ?? {}) as Prisma.InputJsonValue,
         launchAfterInstall: data.launchAfterInstall ?? false,
